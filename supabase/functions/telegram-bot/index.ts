@@ -63,7 +63,7 @@ async function setCompanyDescription(userId: number, description: string): Promi
   if (error) throw error;
 }
 
-async function getCompanyDescription(userId: number): Promise<string | null> {
+export async function getCompanyDescription(userId: number): Promise<string | null> {
   const { data, error } = await supabase
     .from('users')
     .select('company_description')
@@ -94,7 +94,6 @@ bot.command("description", async (ctx) => {
   }
 });
 
-
 // start command.
 bot.command("start", async (ctx) => {
   const userId = ctx.from?.id;
@@ -107,7 +106,6 @@ bot.command("start", async (ctx) => {
   }
 });
 
-// check if user has credits, if so, decrease credits by 1, if not, reply with error.
 bot.use(async (ctx, next) => {
   const userId = ctx.from?.id;
 
