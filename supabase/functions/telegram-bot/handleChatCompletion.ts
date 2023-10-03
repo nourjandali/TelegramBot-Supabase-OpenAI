@@ -1,12 +1,13 @@
 import { openai } from "./utils.ts";
-import { getCompanyDescription } from "./index.ts";
+import { getCompanyDescription, getLanguageName } from "./index.ts";
 
 async function handleChatCompletion(ctx, text) {
   const userId = ctx.from?.id;
-
   const companyDescription = await getCompanyDescription(userId!);
+  const language = await getLanguageName(userId!);
 
   let prompt = `You are a content repurposing professional, you take a text and you rewrite it into compelling content to Instagram ad script. Only include the script. Remember the best instagram ads include the following elements:
+  Write the script in ${language} language.
   1. Keep it simple and short. Stick to plain text.
   2. Add emojis to your posts where appropriate.
   3. Write a killer headline.

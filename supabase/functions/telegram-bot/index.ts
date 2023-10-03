@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { webhookCallback } from "https://deno.land/x/grammy/mod.ts";
 import { YoutubeTranscript } from "https://esm.sh/youtube-transcript@1.0.6";
 import { bot, openai, supabase } from "./utils.ts";
+import languageCodes from "./languageCodes.json" assert { type: "json" };
 import handleChatCompletion from "./handleChatCompletion.ts";
 
 async function getUserCredits(userId: number): Promise<number> {
@@ -59,7 +60,7 @@ async function setCompanyDescription(userId: number, description: string): Promi
     .from('users')
     .update({ company_description: description })
     .eq('user_id', userId);
-  
+
   if (error) throw error;
 }
 
@@ -75,24 +76,32 @@ export async function getCompanyDescription(userId: number): Promise<string | nu
   return data?.company_description || null;
 }
 
-// description command.
-bot.command("description", async (ctx) => {
-  const userId = ctx.from?.id;
-  
-  const description = ctx.match || null;
+async function setUserLanguage(userId: number, responseLang: string): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ response_language: responseLang })
+    .eq('user_id', userId);
 
-  if (description) {
-    await setCompanyDescription(userId!, description);
-    await ctx.reply("Your company description has been set.");
-  } else {
-    const existingDescription = await getCompanyDescription(userId!);
-    if (existingDescription) {
-      await ctx.reply(`Your company description is: ${existingDescription}`);
-    } else {
-      await ctx.reply("You haven't set a company description yet. Provide one after /description to set it.");
-    }
-  }
-});
+  if (error) throw error;
+}
+
+async function getUserLanguage(userId: number): Promise<{ responseLang: string } | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('response_language')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) throw error;
+
+  return data ? { responseLang: data.response_language } : null;
+}
+
+export async function getLanguageName(userId: number): Promise<string> {
+  const userLanguage = await getUserLanguage(userId!);
+  const languageName = languageCodes[userLanguage?.responseLang || "English"];
+  return languageName;
+}
 
 // start command.
 bot.command("start", async (ctx) => {
@@ -117,8 +126,35 @@ bot.use(async (ctx, next) => {
   }
 
   await decreaseUserCredits(userId!);
-  
+
   if (next) await next();
+});
+
+// description command.
+bot.command("description", async (ctx) => {
+  const userId = ctx.from?.id;
+
+  const description = ctx.match || null;
+
+  if (description) {
+    await setCompanyDescription(userId!, description);
+    await ctx.reply("Your company description has been set.");
+  } else {
+    const existingDescription = await getCompanyDescription(userId!);
+    if (existingDescription) {
+      await ctx.reply(`Your company description is: ${existingDescription}`);
+    } else {
+      await ctx.reply("You haven't set a company description yet. Provide one after /description to set it.");
+    }
+  }
+});
+
+// set language command.
+bot.command("language", async (ctx) => {
+  const userId = ctx.from?.id;
+  const responseLang = ctx.match || null;
+  await setUserLanguage(userId!, responseLang);
+  await ctx.reply(`Response language has been set to ${responseLang}`);
 });
 
 // youtube command.
