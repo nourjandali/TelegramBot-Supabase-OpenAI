@@ -1,11 +1,86 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { webhookCallback } from "https://deno.land/x/grammy/mod.ts";
 import { YoutubeTranscript } from "https://esm.sh/youtube-transcript@1.0.6";
-import { bot, openai } from "./utils.ts";
+import { bot, openai, supabase } from "./utils.ts";
 import handleChatCompletion from "./handleChatCompletion.ts";
 
-// start command.
-bot.command("start", (ctx) => ctx.reply("Welcome! Up and running."));
+async function getUserCredits(userId: number): Promise<number> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('credits')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) throw error;
+
+  return data?.credits || 0;
+}
+
+async function decreaseUserCredits(userId: number): Promise<void> {
+  const { data: userData, error: fetchError } = await supabase
+    .from('users')
+    .select('credits')
+    .eq('user_id', userId)
+    .single();
+
+  if (fetchError) throw fetchError;
+
+  const currentCredits = userData?.credits || 0;
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ credits: currentCredits - 1 })
+    .eq('user_id', userId);
+
+  if (updateError) throw updateError;
+}
+
+
+async function userExists(userId: number): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('user_id')
+    .eq('user_id', userId);
+
+  if (error) throw error;
+
+  return data && data.length > 0;
+}
+
+async function createUser(userId: number): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .insert({ user_id: userId, credits: 3 });
+
+  if (error) throw error;
+}
+
+bot.command("start", async (ctx) => {
+  const userId = ctx.from?.id;
+
+  if (!await userExists(userId!)) {
+    await createUser(userId!);
+    await ctx.reply("Welcome! Your account has been created with 3 free credits.");
+  } else {
+    await ctx.reply("Welcome back! Your account is already set up.");
+  }
+});
+
+
+bot.use(async (ctx, next) => {
+  const userId = ctx.from?.id;
+
+  const userCredits = await getUserCredits(userId!);
+
+  if (userCredits <= 0) {
+    await ctx.reply("Sorry, you've run out of credits.");
+    return;
+  }
+
+  await decreaseUserCredits(userId!);
+  
+  if (next) await next();
+});
 
 // youtube command.
 bot.command("youtube", async (ctx) => {
