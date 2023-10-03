@@ -1,58 +1,58 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { Bot, webhookCallback } from "https://deno.land/x/grammy/mod.ts";
-import { OpenAI } from "https://deno.land/x/openai@1.4.2/mod.ts";
-
-const bot = new Bot(Deno.env.get("BOT_TOKEN"));
-const openai = new OpenAI(Deno.env.get("OPENAI_KEY")!);
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { webhookCallback } from "https://deno.land/x/grammy/mod.ts";
+import { YoutubeTranscript } from "https://esm.sh/youtube-transcript@1.0.6";
+import { bot, openai } from "./utils.ts";
+import handleChatCompletion from "./handleChatCompletion.ts";
 
 // start command.
 bot.command("start", (ctx) => ctx.reply("Welcome! Up and running."));
 
+// youtube command.
+bot.command("youtube", async (ctx) => {
+  const url = ctx.match;
+  if (!url) {
+    return ctx.reply("Please provide a YouTube URL.");
+  }
+
+  await ctx.reply("Transcribing...");
+
+  try {
+    const transcript = await YoutubeTranscript.fetchTranscript(url);
+    const formattedTranscript = transcript
+      .map((item) => item.text)
+      .join(" ")
+      .replaceAll("\n", " ");
+
+    /* 
+      Split the formatted transcript into chunks of 4096 characters or less 
+      which is the maximum number of characters allowed in a single Telegram message.
+    */
+    const chunkSize = 4096;
+    for (let i = 0; i < formattedTranscript.length; i += chunkSize) {
+      const chunk = formattedTranscript.slice(i, i + chunkSize);
+    }
+
+    // Send the entire transcript for chat completion
+    await handleChatCompletion(ctx, formattedTranscript);
+  } catch (error) {
+    console.error("Error fetching transcript:", error);
+    await ctx.reply("An error occurred while fetching the transcript.");
+  }
+});
+
 // on text message.
 bot.on("message:text", async (ctx) => {
-  try {
-    await ctx.reply("Generating Post...");
-    const chat_completion = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content:
-            `You are a content repurposing professional, you take a text and you rewrite it into compelling content to instagram ad script. Only include the script. Remember the best instagram ads include the following elements:
-            1. Keep it simple and short. Stick to plain text.
-            2. Add emojis to your posts where appropriate.
-            3. Write a killer headline.
-            4. Open with a story where appropriate.
-            5. Break up walls of text.
-            6. Give specific instructions and unique insights.
-            7. Always end by asking a question.
-            8. Bring a new, unique angle where possible. Don't be afraid of a little controversy.
-            9. Brevity is key.
-            Think about whether your post makes sense as a whole, before you start writing.`
-        },
-        {
-          role: "user",
-          content: ctx.message.text,
-        },
-      ],
-    })
-    await ctx.reply(chat_completion?.choices[0]?.message?.content) || ctx.reply("Please try again.");
-  }
-  catch (err) {
-    console.error(err);
-    await ctx.reply("Error happened while generating post.");
-  }
-}
-);
+  await handleChatCompletion(ctx, ctx.message.text);
+});
 
 // on voice message.
 bot.on("message:voice", async (ctx) => {
   try {
     const voiceId = ctx.message.voice!.file_id;
     const voiceInfo = await bot.api.getFile(voiceId);
-    const fileLink = `https://api.telegram.org/file/bot${
-      Deno.env.get("BOT_TOKEN")
-    }/${voiceInfo.file_path}`;
+    const fileLink = `https://api.telegram.org/file/bot${Deno.env.get(
+      "BOT_TOKEN"
+    )}/${voiceInfo.file_path}`;
     const fileResponse = await fetch(fileLink);
     if (!fileResponse.ok) {
       return ctx.reply("Error fetching file");
@@ -70,53 +70,25 @@ bot.on("message:voice", async (ctx) => {
     });
 
     // generate post.
-    await ctx.reply("Generating Post...");
-    const chat_completion = await openai.createChatCompletion({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content:
-            `You are a content repurposing professional, you take a transcribed voice message and you rewrite it into compelling content to instagram ad script. Only include the script. Remember the best instagram ads include the following elements:
-            1. Keep it simple and short. Stick to plain text.
-            2. Add emojis to your posts where appropriate.
-            3. Write a killer headline.
-            4. Open with a story where appropriate.
-            5. Break up walls of text.
-            6. Give specific instructions and unique insights.
-            7. Always end by asking a question.
-            8. Bring a new, unique angle where possible. Don't be afraid of a little controversy.
-            9. Brevity is key.
-            Think about whether your post makes sense as a whole, before you start writing.`,
-        },
-        {
-          role: "user",
-          content: transcribe.text,
-        },
-      ],
-    });
-    await ctx.reply(
-      chat_completion?.choices[0]?.message?.content || "No response",
-    );
+    await handleChatCompletion(ctx, transcribe.text);
   } catch (err) {
     console.error(err);
     await ctx.reply("Error");
   }
 });
 
-
 // initialize 'handleUpdate' function for webhook callbacks with 'bot' using 'std/http'.
-const handleUpdate = webhookCallback(bot, 'std/http')
+const handleUpdate = webhookCallback(bot, "std/http");
 
 // authenticate the request using a secret and handle updates.
 serve(async (req) => {
   try {
-    const url = new URL(req.url)
-    if (url.searchParams.get('secret') !== Deno.env.get('FUNCTION_SECRET'))
-      return new Response('not allowed', { status: 405 })
+    const url = new URL(req.url);
+    if (url.searchParams.get("secret") !== Deno.env.get("FUNCTION_SECRET"))
+      return new Response("not allowed", { status: 405 });
 
-    return await handleUpdate(req)
+    return await handleUpdate(req);
   } catch (err) {
-    console.error(err)
+    console.error(err);
   }
-})
+});
