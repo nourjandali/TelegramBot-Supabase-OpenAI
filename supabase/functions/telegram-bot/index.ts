@@ -35,7 +35,6 @@ async function decreaseUserCredits(userId: number): Promise<void> {
   if (updateError) throw updateError;
 }
 
-
 async function userExists(userId: number): Promise<boolean> {
   const { data, error } = await supabase
     .from('users')
@@ -55,6 +54,48 @@ async function createUser(userId: number): Promise<void> {
   if (error) throw error;
 }
 
+async function setCompanyDescription(userId: number, description: string): Promise<void> {
+  const { error } = await supabase
+    .from('users')
+    .update({ company_description: description })
+    .eq('user_id', userId);
+  
+  if (error) throw error;
+}
+
+async function getCompanyDescription(userId: number): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('company_description')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) throw error;
+
+  return data?.company_description || null;
+}
+
+// description command.
+bot.command("description", async (ctx) => {
+  const userId = ctx.from?.id;
+  
+  const description = ctx.match || null;
+
+  if (description) {
+    await setCompanyDescription(userId!, description);
+    await ctx.reply("Your company description has been set.");
+  } else {
+    const existingDescription = await getCompanyDescription(userId!);
+    if (existingDescription) {
+      await ctx.reply(`Your company description is: ${existingDescription}`);
+    } else {
+      await ctx.reply("You haven't set a company description yet. Provide one after /description to set it.");
+    }
+  }
+});
+
+
+// start command.
 bot.command("start", async (ctx) => {
   const userId = ctx.from?.id;
 
@@ -66,7 +107,7 @@ bot.command("start", async (ctx) => {
   }
 });
 
-
+// check if user has credits, if so, decrease credits by 1, if not, reply with error.
 bot.use(async (ctx, next) => {
   const userId = ctx.from?.id;
 
