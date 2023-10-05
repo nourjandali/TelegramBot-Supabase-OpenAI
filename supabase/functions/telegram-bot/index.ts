@@ -103,6 +103,33 @@ export async function getLanguageName(userId: number): Promise<string> {
   return languageName;
 }
 
+async function fetchYouTubeTranscript(ctx, url, language, companyDescription) {
+  try {
+    await ctx.reply("Transcribing...");
+
+    const transcript = await YoutubeTranscript.fetchTranscript(url);
+
+    const formattedTranscript = transcript
+      .map((item) => item.text)
+      .join(" ")
+      .replaceAll("\n", " ");
+
+    const chunkSize = 4096;
+    for (let i = 0; i < formattedTranscript.length; i += chunkSize) {
+      const chunk = formattedTranscript.slice(i, i + chunkSize);
+      // Assuming you also want to send the chunks to Telegram
+      await ctx.reply(chunk);
+    }
+
+    handleChatCompletion(ctx, formattedTranscript, language, companyDescription);
+
+  } catch (error) {
+    console.error("Error fetching transcript:", error);
+    await ctx.reply("An error occurred while fetching the transcript.");
+  }
+}
+
+
 // start command.
 bot.command("start", async (ctx) => {
   const userId = ctx.from?.id;
@@ -115,91 +142,71 @@ bot.command("start", async (ctx) => {
   }
 });
 
-bot.use(async (ctx, next) => {
-  const userId = ctx.from?.id;
-
-  const userCredits = await getUserCredits(userId!);
-
-  if (userCredits <= 0) {
-    await ctx.reply("Sorry, you've run out of credits.");
-    return;
-  }
-
-  await decreaseUserCredits(userId!);
-
-  if (next) await next();
-});
-
 // description command.
 bot.command("description", async (ctx) => {
   const userId = ctx.from?.id;
-
-  const description = ctx.match || null;
+  const description = ctx.match;
 
   if (description) {
     await setCompanyDescription(userId!, description);
     await ctx.reply("Your company description has been set.");
-  } else {
-    const existingDescription = await getCompanyDescription(userId!);
-    if (existingDescription) {
-      await ctx.reply(`Your company description is: ${existingDescription}`);
-    } else {
-      await ctx.reply("You haven't set a company description yet. Provide one after /description to set it.");
-    }
+  }
+  else {
+    await ctx.reply("You haven't set a company description yet. Provide one after /description to set it.");
   }
 });
+
 
 // set language command.
 bot.command("language", async (ctx) => {
   const userId = ctx.from?.id;
-  const responseLang = ctx.match || null;
+  const responseLang = ctx.match;
   await setUserLanguage(userId!, responseLang);
   await ctx.reply(`Response language has been set to ${responseLang}`);
 });
 
 // youtube command.
 bot.command("youtube", async (ctx) => {
+  const userId = ctx.from?.id;
+  const companyDescription = await getCompanyDescription(userId!);
+  const language = await getLanguageName(userId!);
+
   const url = ctx.match;
   if (!url) {
     return ctx.reply("Please provide a YouTube URL.");
   }
 
-  await ctx.reply("Transcribing...");
-
-  try {
-    const transcript = await YoutubeTranscript.fetchTranscript(url);
-    const formattedTranscript = transcript
-      .map((item) => item.text)
-      .join(" ")
-      .replaceAll("\n", " ");
-
-    /* 
-      Split the formatted transcript into chunks of 4096 characters or less 
-      which is the maximum number of characters allowed in a single Telegram message.
-    */
-    const chunkSize = 4096;
-    for (let i = 0; i < formattedTranscript.length; i += chunkSize) {
-      const chunk = formattedTranscript.slice(i, i + chunkSize);
-    }
-
-    // Send the entire transcript for chat completion
-    await handleChatCompletion(ctx, formattedTranscript);
-  } catch (error) {
-    console.error("Error fetching transcript:", error);
-    await ctx.reply("An error occurred while fetching the transcript.");
-  }
+  fetchYouTubeTranscript(ctx, url, language, companyDescription);
 });
 
 // on text message.
 bot.on("message:text", async (ctx) => {
-  await handleChatCompletion(ctx, ctx.message.text);
+  const userId = ctx.from?.id;
+  const companyDescription = await getCompanyDescription(userId!);
+  const language = await getLanguageName(userId!);
+  const userCredits = await getUserCredits(userId!);
+
+  if (ctx.message.text.startsWith('/')) {
+    return;
+  }
+
+  if (userCredits <= 0) {
+    return await ctx.reply("Sorry, you've run out of credits.");
+  }
+
+  handleChatCompletion(ctx, ctx.message.text, language, companyDescription);
+  decreaseUserCredits(userId!);
 });
 
-// on voice message.
-bot.on("message:voice", async (ctx) => {
+async function getTranscribe(ctx, voiceId, voiceInfo) {
+  const userId = ctx.from?.id;
+  const companyDescription = await getCompanyDescription(userId!);
+  const language = await getLanguageName(userId!);
+  const userCredits = await getUserCredits(userId!);
+  if (userCredits <= 0) {
+    return await ctx.reply("Sorry, you've run out of credits.");
+  }
   try {
-    const voiceId = ctx.message.voice!.file_id;
-    const voiceInfo = await bot.api.getFile(voiceId);
     const fileLink = `https://api.telegram.org/file/bot${Deno.env.get(
       "BOT_TOKEN"
     )}/${voiceInfo.file_path}`;
@@ -220,7 +227,24 @@ bot.on("message:voice", async (ctx) => {
     });
 
     // generate post.
-    await handleChatCompletion(ctx, transcribe.text);
+    handleChatCompletion(ctx, transcribe.text, language, companyDescription);
+
+    // decrease user credits.
+    decreaseUserCredits(userId!);
+  }
+  catch (err) {
+    console.error(err);
+    await ctx.reply("Error fetching transcribe");
+  }
+}
+
+// on voice message.
+bot.on("message:voice", async (ctx) => {
+  try {
+    const voiceId = ctx.message.voice!.file_id;
+    const voiceInfo = await bot.api.getFile(voiceId);
+    getTranscribe(ctx, voiceId, voiceInfo);
+
   } catch (err) {
     console.error(err);
     await ctx.reply("Error");
