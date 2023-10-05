@@ -179,6 +179,23 @@ bot.command("youtube", async (ctx) => {
   fetchYouTubeTranscript(ctx, url, language, companyDescription);
 });
 
+// help command.
+bot.command("help", (ctx) => {
+  const commandsList = [
+    "🚀 /start - Start using the bot",
+    "📝 /description [description] - Set company description",
+    "🗣️ /language [language] - Set response language",
+    "🎥 /youtube [YouTube URL] - Get transcript from a YouTube video",
+    "ℹ️ /help - Show available commands",
+  ];
+
+  const commandsText = commandsList.join("\n\n");
+
+  const helpMessage = `Available commands: \n\n${commandsText}`;
+
+  ctx.reply(helpMessage);
+});
+
 // on text message.
 bot.on("message:text", async (ctx) => {
   const userId = ctx.from?.id;
@@ -250,22 +267,6 @@ bot.on("message:voice", async (ctx) => {
     await ctx.reply("Error");
   }
 });
-
-// help command.
-bot.command("help", async (ctx) => {
-  await ctx.reply(`
-📖 Here are the available commands:
-
-▶️ /start - Initialize or check the user account.
-📝 /description - Set or get your company's description.
-🌍 /language - Set the language for bot responses.
-🎥 /youtube - Get the transcript of a YouTube video.
-ℹ️ /help - List all available commands.
-
-Note: When using commands that require additional parameters (e.g., /youtube, /language, /description), provide the parameter right after the command.
-  `);
-});
-
 
 // initialize 'handleUpdate' function for webhook callbacks with 'bot' using 'std/http'.
 const handleUpdate = webhookCallback(bot, "std/http");
