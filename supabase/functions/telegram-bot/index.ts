@@ -251,6 +251,22 @@ bot.on("message:voice", async (ctx) => {
   }
 });
 
+// help command.
+bot.command("help", async (ctx) => {
+  await ctx.reply(`
+📖 Here are the available commands:
+
+▶️ /start - Initialize or check the user account.
+📝 /description - Set or get your company's description.
+🌍 /language - Set the language for bot responses.
+🎥 /youtube - Get the transcript of a YouTube video.
+ℹ️ /help - List all available commands.
+
+Note: When using commands that require additional parameters (e.g., /youtube, /language, /description), provide the parameter right after the command.
+  `);
+});
+
+
 // initialize 'handleUpdate' function for webhook callbacks with 'bot' using 'std/http'.
 const handleUpdate = webhookCallback(bot, "std/http");
 
