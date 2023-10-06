@@ -1,7 +1,7 @@
 import { openai } from "./utils.ts";
 import { getCompanyDescription, getLanguageName } from "./index.ts";
 
-async function handleChatCompletion(ctx, text, language, companyDescription) {
+async function createPost(ctx, text, language, companyDescription) {
   try {
 
 
@@ -36,4 +36,4 @@ async function handleChatCompletion(ctx, text, language, companyDescription) {
   }
 }
 
-export default handleChatCompletion;
+export default createPost;

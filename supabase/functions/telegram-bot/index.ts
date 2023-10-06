@@ -3,7 +3,7 @@ import { webhookCallback } from "https://deno.land/x/grammy/mod.ts";
 import { YoutubeTranscript } from "https://esm.sh/youtube-transcript@1.0.6";
 import { bot, openai, supabase } from "./utils.ts";
 import languageCodes from "./languageCodes.json" assert { type: "json" };
-import handleChatCompletion from "./handleChatCompletion.ts";
+import createPost from "./createPost.ts";
 
 async function getUserCredits(userId: number): Promise<number> {
   const { data, error } = await supabase
@@ -121,7 +121,7 @@ async function fetchYouTubeTranscript(ctx, url, language, companyDescription) {
       await ctx.reply(chunk);
     }
 
-    handleChatCompletion(ctx, formattedTranscript, language, companyDescription);
+    createPost(ctx, formattedTranscript, language, companyDescription);
 
   } catch (error) {
     console.error("Error fetching transcript:", error);
@@ -211,7 +211,7 @@ bot.on("message:text", async (ctx) => {
     return await ctx.reply("Sorry, you've run out of credits.");
   }
 
-  handleChatCompletion(ctx, ctx.message.text, language, companyDescription);
+  createPost(ctx, ctx.message.text, language, companyDescription);
   decreaseUserCredits(userId!);
 });
 
@@ -244,7 +244,7 @@ async function getTranscribe(ctx, voiceId, voiceInfo) {
     });
 
     // generate post.
-    handleChatCompletion(ctx, transcribe.text, language, companyDescription);
+    createPost(ctx, transcribe.text, language, companyDescription);
 
     // decrease user credits.
     decreaseUserCredits(userId!);
